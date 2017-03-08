@@ -1,0 +1,1 @@
+A set of programs for Chris to describe, probably will be covered under GNU public once he decides.
