@@ -23,15 +23,14 @@ class wsvEntry(object):
         outAtom.resSeq = self.pro_coll_num      
         outAtom.x = self.x
         outAtom.y = self.y
-        outAtom.z = self.z + 3000
+        outAtom.z = self.z + zoffset
         outAtom.occupancy = self.generation
-        outAtom.tempFactor = self.energy/10
         if self.ptype == "ELE":
             outAtom.element = "O"
-            outAtom.tempFactor = self.energy
+            outAtom.tempFactor = self.energy/eleengscale
         else:
             outAtom.element = "H"
-            outAtom.tempFactor = self.energy/100
+            outAtom.tempFactor = self.energy/protengscale
         return outAtom      
 
 #Stores a wsv file and has methods to convert to a pdb file.
@@ -91,11 +90,24 @@ class pdbfile(object):
         return outstring[:-1]
         
 def main():
+    #Setting up globals
+    global protengscale
+    global eleengscale
+    global zoffset
+
     #Argument parsing
     parser = argparse.ArgumentParser(description='Convert wsv file to pdb file')
     parser.add_argument("wsvfile", help='wsv file location')
+    parser.add_argument("-p", "--protEngScale", type = float, default = 100)
+    parser.add_argument("-e", "--eleEngScale", type = float, default = 1)
+    parser.add_argument("-z", "--zOffset", type = float, default = 3000)
     parser.add_argument("-o", "--outfile", help='output pdb file location')
     args = parser.parse_args()
+    
+    #Value adjustment values to keep values within PDB fields
+    protengscale = args.protEngScale
+    eleengscale = args.eleEngScale
+    zoffset = args.zOffset    
     
     #Control flow
     outpdb = wsvfile(args.wsvfile).toPdb()
