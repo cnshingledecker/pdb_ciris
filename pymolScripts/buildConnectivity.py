@@ -18,8 +18,6 @@ class branch():
         self.bb = -1
         
         while(True):
-            
-        
             #Setting up objects in pymol and collecting atom data
             myspace = {"pastAD": [], "currentAD": []}
             cmd.select("past", "id " + str(self.it))
@@ -48,13 +46,10 @@ class branch():
             
             #Setting up current atom
             if myspace["currentAD"] == []:
-                print("breakEnd")
                 break
             elif myspace["pastAD"][0] !=  myspace["currentAD"][0]:
-                print("breakPro")
                 break
             elif myspace["pastAD"][1] !=  myspace["currentAD"][1]:
-                print("breakEle")
                 break
         
             current = myspace["currentAD"]
@@ -99,7 +94,8 @@ def main():
     cmd.hide("everything")
     
     it = 1
-    while it < 36367:
+    while it < 1000:
+        
         holdbranch = branch(it)
         it = holdbranch.it
         it += 1
