@@ -8,30 +8,32 @@ def scantoview(newview, steps, imgstart):
     delta = np.subtract(newview, oldview)
     delta = delta / steps
     for i in range(1,steps):
-        print(imgval)
         currentview = np.add(oldview, delta * i)
         cmd.set_view(currentview)
         cmd.png("img{:04}".format(imgval))
         imgval += 1
     return imgval
     
-class branch():
-    def __init__(self, startIt):
+class Gradient():
+    def __init__(self, e1, rgb1, e2, rgb2):
+        self.slope = np.subtract(rgb2, rgb1) / (e2 - e1)
+        self.interc = np.subtract(rgb2, e2 * self.slope)
+        
+    def color(self, energy):
+        return list(self.slope * energy + self.interc)
+        
+    
+class AtomNode():
+    def __init__(self, startIt, energyColorGradient):
         #Needed declarations
         self.it = startIt - 1
-        self.startE = -1
-        self.rm = -1
-        self.rb = -1
-        self.gm = -1
-        self.gb = -1
-        self.bm = -1
-        self.bb = -1
+        self.colNum = 0
         self.pastAD = []
         self.currentAD = []
         
-        self.advanceAtom()
+        self.advanceAtom(energyColorGradient)
                
-    def advanceAtom(self):
+    def advanceAtom(self, energyColorGradient):
         self.it += 1
         #Adding next atom and advancing
         myspace = {"pastAD": [], "currentAD": []}
@@ -47,114 +49,72 @@ class branch():
         
         #Showing past atom
         cmd.show("spheres", "past")
-        cmd.color("gray70", "past")
+        cmd.set_color("color" + str(self.colNum), energyColorGradient.color(self.pastAD[2]))
+        cmd.color("color" + str(self.colNum), "past")
+        self.colNum += 1
         
-    def addNext(self):
-        print(self.it)
+    def addNext(self, energyColorGradient):
+        returnVal = None
         if self.currentAD == []:
-            print("END")
-            pass
-        elif self.pastAD[0] !=  self.currentAD[0]:
-            print("new prot")
-            pass
+            return "END"
+        elif self.pastAD[0] != self.currentAD[0]:
+            self.advanceAtom(energyColorGradient)
+            return "newProt"
         elif self.pastAD[1] !=  self.currentAD[1]:
-            print("new Branch")
-            pass
+            self.advanceAtom(energyColorGradient)
+            return "newBranch"
         else:
             x1, y1, z1 = self.pastAD[3], self.pastAD[4], self.pastAD[5]
-            r1, g1, b1 = 70, 70, 70
+            rgb1 = energyColorGradient.color(self.pastAD[2])             
             x2, y2, z2 = self.currentAD[3], self.currentAD[4], self.currentAD[5]
-            r2, g2, b2 = 70, 70, 70
+            rgb2 = energyColorGradient.color(self.currentAD[2])
             #Making connector
-            radius = .4
+            radius = .5
             holdview = cmd.get_view()
-            cmd.load_cgo([9.0, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2], "c" + str(self.it))    
+            cmd.load_cgo([9.0, x1, y1, z1, x2, y2, z2, radius, rgb1[0], rgb1[1], rgb1[2], rgb2[0], rgb2[1], rgb2[2]], "c" + str(self.it))    
             cmd.set_view(holdview)
-            
-        self.advanceAtom()
+            self.advanceAtom(energyColorGradient)
+            return None
         
         
-        '''
-        while(True):
-            
-            
-            #Getting starting energy and colors
-            if self.startE < 0:
-                self.startE = myspace["pastAD"][2]
-                self.rm = (.7 - 1) / (0 - self.startE)
-                self.rb = .7
-                self.gm = (.7 - 0) / (0 - self.startE)
-                self.gb = .7
-                self.bm = (.7 - 0) / (0 - self.startE)
-                self.bb = .7
-            
-            #Coloring past atom and storing data.
-            past = myspace["pastAD"]            
-            x1, y1, z1 = past[3], past[4], past[5]
-            r1, g1, b1 = past[2] * self.rm + self.rb, past[2] * self.gm + self.gb, past[2] * self.bm + self.bb
-            cmd.set_color("chold"+str(self.it), [r1, g1, b1])
-            
-            #printing img
-            cmd.png("img{:04d}".format(self.imgval))
-            self.imgval += 1
-            
-            #Setting up current atom
-            if myspace["currentAD"] == []:
-                break
-            elif myspace["pastAD"][0] !=  myspace["currentAD"][0]:
-                break
-            elif myspace["pastAD"][1] !=  myspace["currentAD"][1]:
-                break
-        
-            current = myspace["currentAD"]
-            x2, y2, z2 = current[3], current[4], current[5]
-            r2, g2, b2 = current[2] * self.rm + self.rb, current[2] * self.gm + self.gb, current[2] * self.bm + self.bb
-        
-            #Making connector
-            radius = .4
-            holdview = cmd.get_view()
-            cmd.load_cgo([9.0, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2], "c" + str(self.it))    
-            cmd.set_view(holdview)
-            self.it += 1
-        '''
+     
         
 def main():
+    #Load in structure
     cmd.load("..\\testfiles\\trackplot.pdb")
     cmd.hide("everything")
+    cmd.bg_color("white")
+    
+    #Sets up energy color gradient (this can be changed at any time)
+    energyColor = Gradient(86.56, (1, 0 , 0), 0, (.70, .70, .70))
     
     cmd.set_view((\
-        0.989454925,    0.119257055,    0.082188576,\
-        -0.078681566,    0.919020355,   -0.386279583,\
-        -0.121599913,    0.375739068,    0.918713212,\
-        -0.000024408,    0.000082886, -1595.923706055,\
-        111.845207214,  103.542381287,  915.251525879,\
-        1469.349487305, 1722.521118164,  -20.000000000 ))
+        0.957694948,    0.028183326,   -0.286400944,\
+        -0.138612419,    0.917322457,   -0.373235583,\
+        0.252203047,    0.397143424,    0.882423639,\
+        -0.000240028,   -0.004241563, -948.997741699,\
+        -249.833526611, -132.563354492, 2972.489990234,\
+        -40.742408752, 1938.937011719,  -20.000000000 ))
     
-    branch1 = branch(1)
-    for i in range(1,30):
-        branch1.addNext()
-        cmd.png("img{:04d}".format(i))
+    atomInfo = AtomNode(1, energyColor)
+    breaker = None
+    while(breaker == None):
+        breaker = atomInfo.addNext(energyColor)
+    print(breaker)
+    breaker = None
+    while(breaker == None):
+        breaker = atomInfo.addNext(energyColor)
+    print(breaker)
+    atomInfo.advanceAtom(energyColor)
+    breaker = None
+    while(breaker == None):
+        breaker = atomInfo.addNext(energyColor)
+    print(breaker)
+        
+        
     
     '''
-    it, imgval = 1, 1
-    #Making the movie
-    cmd.set_view((\
-        0.989454925,    0.119257055,    0.082188576,\
-        -0.078681566,    0.919020355,   -0.386279583,\
-        -0.121599913,    0.375739068,    0.918713212,\
-        -0.000024408,    0.000082886, -1595.923706055,\
-        111.845207214,  103.542381287,  915.251525879,\
-        1469.349487305, 1722.521118164,  -20.000000000 ))
     
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
     
     imgval = scantoview((\
         0.301146746,    0.683516979,   -0.664916396,\

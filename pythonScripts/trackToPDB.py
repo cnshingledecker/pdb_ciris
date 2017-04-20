@@ -24,7 +24,7 @@ class wsvEntry(object):
         outAtom.x = self.x
         outAtom.y = self.y
         outAtom.z = self.z + zoffset
-        outAtom.occupancy = self.generation
+        outAtom.occupancy = self.generation/100.
         if self.ptype == "ELE":
             outAtom.element = "O"
             outAtom.tempFactor = self.energy/eleengscale
@@ -40,7 +40,6 @@ class wsvfile(object):
         with open(filename, "r") as fle:
             for line in fle:
                 self.entries.append(wsvEntry(line))
-
     def __str__(self):
         outstring = ""
         for entry in self.entries:
