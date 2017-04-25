@@ -1,118 +1,153 @@
 from pymol import cmd
 import numpy as np
         
+#Stores a gradient function for use in coloring
+class Gradient():
+    def __init__(self, e1, rgb1, e2, rgb2):
+        self.slope = np.subtract(rgb2, rgb1) / (e2 - e1)
+        self.interc = np.subtract(rgb2, e2 * self.slope)
+      
+    #Given an energy value, gives a RGB value
+    def color(self, energy):
+        return list(self.slope * energy + self.interc)
 
-def scantoview(newview, steps, imgstart):
-    imgval = imgstart
+#Class for storing image print settings
+class Pngprinter():
+    def __init__(self, actuallyPrint = True):
+        self.filebase = "img"
+        self.width = "6in"
+        self.height = "6in"
+        self.dpi = 150
+        self.ray = 1
+        self.quiet = 1
+        self.imgval = 0
+        self.actuallyPrint = actuallyPrint
+        
+    #Used to print an image
+    def out(self):
+        if self.actuallyPrint:
+            cmd.png("{}{:05d}".format(self.filebase, self.imgval), self.width, self.height, self.dpi, self.ray, self.quiet)
+        self.imgval += 1
+  
+#Device for traversing electron path  
+class AtomNode():
+    def __init__(self, energyColorGradient):
+        #Needed declarations
+        self.it = 0
+        self.colNum = 0
+        self.conRad = 0.5
+        self.pastAD = []
+        self.currentAD = []
+        self.ECG = energyColorGradient
+        self.advanceAtom()
+    
+    #Creates a selection of one atom at pdbID and outputs a List of important data from the selection
+    def setdata(self, selectionName, pdbID):
+        myspace = {"atomdata": []}
+        cmd.select(selectionName, "id " + str(pdbID))
+        cmd.iterate(selectionName, "atomdata += [ID, resi, q, b,]", space=myspace)
+        cmd.iterate_state(-1, selectionName, "atomdata += [x, y, z]", space=myspace)
+        return myspace["atomdata"]
+       
+    #stores the new atom data and shows the new atom
+    def advanceAtom(self):
+        self.it += 1
+        #Adding next atom and advancing
+        self.pastAD = self.setdata("past", self.it)
+        self.currentAD = self.setdata("current", self.it + 1)
+        
+        #Showing past atom
+        cmd.show("spheres", "past")
+        cmd.set_color("color" + str(self.colNum), self.ECG.color(self.pastAD[3]))
+        cmd.color("color" + str(self.colNum), "past")
+        self.colNum += 1
+        
+    #Makes connector
+    def connect(self):
+        x1, y1, z1 = self.pastAD[4], self.pastAD[5], self.pastAD[6]
+        rgb1 = self.ECG.color(self.pastAD[3])             
+        x2, y2, z2 = self.currentAD[4], self.currentAD[5], self.currentAD[6]
+        rgb2 = self.ECG.color(self.currentAD[3])
+        holdview = cmd.get_view()
+        cmd.load_cgo([9.0, x1, y1, z1, x2, y2, z2, self.conRad, rgb1[0], rgb1[1], rgb1[2], rgb2[0], rgb2[1], rgb2[2]], "c" + str(self.it))    
+        cmd.set_view(holdview)
+        
+    #method which adds the next atom and connects it 
+    def addNext(self):
+        if self.currentAD == []:
+            return "END"
+        elif self.pastAD[1] != self.currentAD[1]:            
+            self.advanceAtom()
+            return "newProt"
+        elif int(round(self.pastAD[2]*100)) != int(round(self.currentAD[2]*100)):
+            myspace = {"near": []}            
+            cmd.select("poss","current around 13")
+            cmd.iterate("poss", "near.append([ID, resi, q, b])", space=myspace)
+            near = myspace["near"]
+            near.sort(key=lambda x: x[2])
+            self.pastAD = self.setdata("past", near[0][0])
+            self.connect()            
+            self.advanceAtom()
+            return "newBranch"
+        else:
+            self.connect()
+            self.advanceAtom()
+            return None
+
+#Linearly shifts view to a new point. Give it the new view matrix, the Pngprinter, the number of imgs to print and the number the img starts at.
+def scantoview(newview, steps, pngprinter):
     oldview = cmd.get_view()
     delta = np.subtract(newview, oldview)
     delta = delta / steps
-    for i in range(1,steps):
-        print(imgval)
+    for i in range(0, steps):
         currentview = np.add(oldview, delta * i)
         cmd.set_view(currentview)
-        cmd.png("img{:04}".format(imgval))
-        imgval += 1
-    return imgval
-    
-class branch():
-    def __init__(self, startIt, imgstart):
-        #Needed declarations
-        self.it = startIt
-        self.imgval = imgstart
-        self.startE = -1
-        self.rm = -1
-        self.rb = -1
-        self.gm = -1
-        self.gb = -1
-        self.bm = -1
-        self.bb = -1
+        pngprinter.out()
         
-        while(True):
-            #Setting up objects in pymol and collecting atom data
-            myspace = {"pastAD": [], "currentAD": []}
-            cmd.select("past", "id " + str(self.it))
-            cmd.iterate("past", "pastAD += [resi, q, b]", space=myspace)
-            cmd.iterate_state(-1, "past", "pastAD += [x, y, z]", space=myspace)
-            cmd.select("current", "id " + str(self.it + 1))
-            cmd.iterate("current", "currentAD += [resi, q, b]", space=myspace)
-            cmd.iterate_state(-1, "current", "currentAD += [x, y, z]", space=myspace)
-            cmd.show("spheres", "past or current")
-            
-            #Getting starting energy and colors
-            if self.startE < 0:
-                self.startE = myspace["pastAD"][2]
-                self.rm = (.7 - 1) / (0 - self.startE)
-                self.rb = .7
-                self.gm = (.7 - 0) / (0 - self.startE)
-                self.gb = .7
-                self.bm = (.7 - 0) / (0 - self.startE)
-                self.bb = .7
-            
-            #Coloring past atom and storing data.
-            past = myspace["pastAD"]            
-            x1, y1, z1 = past[3], past[4], past[5]
-            r1, g1, b1 = past[2] * self.rm + self.rb, past[2] * self.gm + self.gb, past[2] * self.bm + self.bb
-            cmd.set_color("chold"+str(self.it), [r1, g1, b1])
-            
-            #printing img
-            cmd.png("img{:04d}".format(self.imgval))
-            self.imgval += 1
-            
-            #Setting up current atom
-            if myspace["currentAD"] == []:
-                break
-            elif myspace["pastAD"][0] !=  myspace["currentAD"][0]:
-                break
-            elif myspace["pastAD"][1] !=  myspace["currentAD"][1]:
-                break
-        
-            current = myspace["currentAD"]
-            x2, y2, z2 = current[3], current[4], current[5]
-            r2, g2, b2 = current[2] * self.rm + self.rb, current[2] * self.gm + self.gb, current[2] * self.bm + self.bb
-        
-            #Making connector
-            radius = .4
-            holdview = cmd.get_view()
-            cmd.load_cgo([9.0, x1, y1, z1, x2, y2, z2, radius, r1, g1, b1, r2, g2, b2], "c" + str(self.it))    
-            cmd.set_view(holdview)
-            self.it += 1
-            
 def main():
+    #Load in structure and set stage
     cmd.load("..\\testfiles\\trackplot.pdb")
     cmd.hide("everything")
+    cmd.bg_color("white")
+    cmd.clip("slab", 1000)
     
-    it, imgval = 1, 1
-    #Making the movie
+    #Sets up energy color gradient (this can be changed at any time)
+    energyColor = Gradient(86.56, (1, 0 , 0), 0, (.70, .70, .70))
+    
     cmd.set_view((\
-        0.989454925,    0.119257055,    0.082188576,\
-        -0.078681566,    0.919020355,   -0.386279583,\
-        -0.121599913,    0.375739068,    0.918713212,\
-        -0.000024408,    0.000082886, -1595.923706055,\
-        111.845207214,  103.542381287,  915.251525879,\
-        1469.349487305, 1722.521118164,  -20.000000000 ))
+        0.957694948,    0.028183326,   -0.286400944,\
+        -0.138612419,    0.917322457,   -0.373235583,\
+        0.252203047,    0.397143424,    0.882423639,\
+        -0.000182331,   -0.003953297, -487.787475586,\
+        -71.356201172,  -66.460510254, 3058.803955078,\
+        -501.575195312, 1478.104492188,  -20.000000000 ))
     
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
-    holdbranch = branch(it, imgval)
-    it = holdbranch.it + 1
-    imgval = holdbranch.imgval
+    atomInfo = AtomNode(energyColor)
+    pngprinter = Pngprinter()
+    for i in range(0,69):
+        atomInfo.addNext()
+        pngprinter.out()
     
-    imgval = scantoview((\
-        0.301146746,    0.683516979,   -0.664916396,\
-        0.748767972,   -0.601271391,   -0.278967589,\
-        -0.590473652,   -0.413857192,   -0.692866027,\
-        -0.000024408,    0.000082886, -268.568328857,\
-        111.845207214,  103.542381287,  915.251525879,\
-        141.994079590,  395.165588379,  -20.000000000 ), 20, imgval)
+    scantoview((\
+        0.963438809,    0.006933183,   -0.267837793,\
+        -0.117464207,    0.909400284,   -0.398989260,\
+        0.240805432,    0.415861994,    0.876967907,\
+        -0.000037957,   -0.003030211, -446.935913086,\
+        -170.208068848, -159.757263184, 2987.006591797,\
+        -541.689941406, 1437.990112305,  -20.000000000 ), 5, pngprinter)
+        
+    for i in range(69, 109):
+        atomInfo.addNext()
+        pngprinter.out()
     
+    #This bit of code can be used to grab a full branch
     
-
+    breaker = None
+    while(breaker == None):
+        breaker = atomInfo.addNext()
+    print(breaker)
     
+        
     
 if __name__ == "__main__":
     main()
