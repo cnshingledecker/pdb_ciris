@@ -139,13 +139,15 @@ def scantoview(newview, steps, pngprinter):
         pngprinter.out()
         
 def main():
+    print("Welcome to buildConnectivity")
     #Load in structure and set stage
-    cmd.load("..\\testfiles\\trackplotClean.pdb")
+    cmd.load("../testfiles/trackplotClean.pdb")
     cmd.hide("everything")
     cmd.bg_color("white")
     cmd.clip("slab", 1000)
     
     #Creates important objects: atom node and pngprinter
+    print("Now creating important objects")
     atomInfo = AtomNode(Gradient(35, (1, 0 , 0), 0, (.70, .70, .70)))
     pngprinter = Pngprinter("Quick")
     
@@ -154,6 +156,7 @@ def main():
     #pngprinter.dpi = 100
     
     #Creates the movie
+    print("Now creating the movie")
     cmd.set_view((\
         0.659889638,    0.127799481,    0.740413308,\
         -0.385417193,    0.903480828,    0.187554732,\
@@ -163,7 +166,9 @@ def main():
         -32534.138671875, 34107.878906250,  -20.000000000 ))
         
     atomInfo.addNextAtoms(pngprinter, 1, 117)
+    print("Going to new view")
     
+
     scantoview((\
         0.659820437,    0.127603829,    0.740508616,\
         -0.385310411,    0.903510094,    0.187633067,\
@@ -172,6 +177,7 @@ def main():
         -1.017456055,    1.457458496, 2915.541503906,\
         -32029.906250000, 34612.128906250,  -20.000000000 ), 5, pngprinter)
     
+    print("Going to new view")
     atomInfo.addNextAtoms(pngprinter, 117, 754)
     
     scantoview((\
